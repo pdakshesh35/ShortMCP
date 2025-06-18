@@ -1,11 +1,12 @@
-from typing import Any
+from typing import Any, Dict, Optional
+
 import httpx
 from mcp.server.fastmcp import FastMCP
 
 # Initialize FastMCP server
-mcp = FastMCP("weather")
+mcp = FastMCP("news")
 
-# Constants
+# Constants for the example weather tools
 NWS_API_BASE = "https://api.weather.gov"
 USER_AGENT = "weather-app/1.0"
 
@@ -24,11 +25,12 @@ Each scene should:
     • Include motion effects like zoom_in, pan_right, fade_in, wobble, etc.
 """
 
-async def make_nws_request(url: str) -> dict[str, Any] | None:
+
+async def make_nws_request(url: str) -> Optional[Dict[str, Any]]:
     """Make a request to the NWS API with proper error handling."""
     headers = {
         "User-Agent": USER_AGENT,
-        "Accept": "application/geo+json"
+        "Accept": "application/geo+json",
     }
     async with httpx.AsyncClient() as client:
         try:
@@ -38,24 +40,22 @@ async def make_nws_request(url: str) -> dict[str, Any] | None:
         except Exception:
             return None
 
-def format_alert(feature: dict) -> str:
+
+def format_alert(feature: Dict[str, Any]) -> str:
     """Format an alert feature into a readable string."""
     props = feature["properties"]
-    return f"""
-Event: {props.get('event', 'Unknown')}
-Area: {props.get('areaDesc', 'Unknown')}
-Severity: {props.get('severity', 'Unknown')}
-Description: {props.get('description', 'No description available')}
-Instructions: {props.get('instruction', 'No specific instructions provided')}
-"""
+    return (
+        f"Event: {props.get('event', 'Unknown')}\n"
+        f"Area: {props.get('areaDesc', 'Unknown')}\n"
+        f"Severity: {props.get('severity', 'Unknown')}\n"
+        f"Description: {props.get('description', 'No description available')}\n"
+        f"Instructions: {props.get('instruction', 'No specific instructions provided')}"
+    )
+
 
 @mcp.tool()
 async def get_alerts(state: str) -> str:
-    """Get weather alerts for a US state.
-
-    Args:
-        state: Two-letter US state code (e.g. CA, NY)
-    """
+    """Get weather alerts for a US state."""
     url = f"{NWS_API_BASE}/alerts/active/area/{state}"
     data = await make_nws_request(url)
 
@@ -68,41 +68,35 @@ async def get_alerts(state: str) -> str:
     alerts = [format_alert(feature) for feature in data["features"]]
     return "\n---\n".join(alerts)
 
+
 @mcp.tool()
 async def get_forecast(latitude: float, longitude: float) -> str:
-    """Get weather forecast for a location.
-
-    Args:
-        latitude: Latitude of the location
-        longitude: Longitude of the location
-    """
-    # First get the forecast grid endpoint
+    """Get weather forecast for a location."""
     points_url = f"{NWS_API_BASE}/points/{latitude},{longitude}"
     points_data = await make_nws_request(points_url)
 
     if not points_data:
         return "Unable to fetch forecast data for this location."
 
-    # Get the forecast URL from the points response
     forecast_url = points_data["properties"]["forecast"]
     forecast_data = await make_nws_request(forecast_url)
 
     if not forecast_data:
         return "Unable to fetch detailed forecast."
 
-    # Format the periods into a readable forecast
     periods = forecast_data["properties"]["periods"]
     forecasts = []
     for period in periods[:5]:  # Only show next 5 periods
-        forecast = f"""
-{period['name']}:
-Temperature: {period['temperature']}°{period['temperatureUnit']}
-Wind: {period['windSpeed']} {period['windDirection']}
-Forecast: {period['detailedForecast']}
-"""
+        forecast = (
+            f"{period['name']}:\n"
+            f"Temperature: {period['temperature']}°{period['temperatureUnit']}\n"
+            f"Wind: {period['windSpeed']} {period['windDirection']}\n"
+            f"Forecast: {period['detailedForecast']}"
+        )
         forecasts.append(forecast)
 
     return "\n---\n".join(forecasts)
+
 
 @mcp.prompt(
     "script-prompt",
@@ -120,25 +114,40 @@ def news_script_prompt(article: str) -> str:
             {PROMPT_STRUCTURE_INSTRUCTIONS}
 
             End the final scene with a strong call to action, like:
-            “If you liked this, hit follow — you deserve better news.”
+            "If you liked this, hit follow — you deserve better news."
             Begin with this news story:
             {article}
         """
     )
 
-@mcp.tool()
-async def get_news(news: str) -> str:
-    """.
-    Get News into Divided multi scene
-    Args:
-        news : news content
-    """
-    return news_script_prompt(news)
 
 @mcp.tool()
-async def generate_text_to_speech(script:str) -> 
+async def get_news(news: str) -> str:
+    """Divide a news story into a multi-scene JSON script."""
+    return news_script_prompt(news)
+
+
+@mcp.tool()
+async def generate_image(prompt: str) -> str:
+    """Placeholder for image generation."""
+    # In a full implementation this would call an image generation service.
+    return "image_placeholder.png"
+
+
+@mcp.tool()
+async def generate_text_to_speech(script: str) -> str:
+    """Placeholder for text-to-speech generation."""
+    # In a full implementation this would call a TTS service.
+    return "tts_audio_placeholder.mp3"
+
+
+@mcp.tool()
+async def compile_video(scenes: Dict[str, Any]) -> str:
+    """Placeholder for final video compilation."""
+    # In a full implementation this would stitch images and audio together.
+    return "vertical_video_placeholder.mp4"
 
 
 if __name__ == "__main__":
     # Initialize and run the server
-    mcp.run(transport='stdio')
+    mcp.run(transport="stdio")
