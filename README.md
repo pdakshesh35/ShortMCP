@@ -8,4 +8,7 @@ Run the server with:
 python server.py
 ```
 
+Make sure the environment variables `OPENAI_API_KEY` and `RUNWARE_API_KEY` are
+set to enable image and audio generation.
+
 The server exposes tools that can be called from a compatible MCP client such as Claude Desktop.

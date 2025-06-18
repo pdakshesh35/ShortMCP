@@ -1,5 +1,11 @@
 from typing import Any, Dict, Optional
 
+import os
+import uuid
+import asyncio
+from openai import OpenAI
+from runware import Runware, IImageInference
+
 import httpx
 from mcp.server.fastmcp import FastMCP
 
@@ -129,16 +135,48 @@ async def get_news(news: str) -> str:
 
 @mcp.tool()
 async def generate_image(prompt: str) -> str:
-    """Placeholder for image generation."""
-    # In a full implementation this would call an image generation service.
-    return "image_placeholder.png"
+    """Generate an image using the Runware API and return the image URL."""
+    api_key = os.getenv("RUNWARE_API_KEY")
+    if not api_key:
+        raise RuntimeError("RUNWARE_API_KEY environment variable is not set")
+
+    client = Runware(api_key=api_key)
+    await client.connect()
+
+    request = IImageInference(
+        positivePrompt=prompt,
+        taskUUID=str(uuid.uuid4()),
+        model="runware:100@1",
+        numberResults=1,
+        height=2048,
+        width=1152,
+    )
+    images = await client.imageInference(requestImage=request)
+    if images and len(images) > 0:
+        return images[0].imageURL
+    raise RuntimeError("No image generated")
 
 
 @mcp.tool()
 async def generate_text_to_speech(script: str) -> str:
-    """Placeholder for text-to-speech generation."""
-    # In a full implementation this would call a TTS service.
-    return "tts_audio_placeholder.mp3"
+    """Convert script text to speech using OpenAI TTS and return the file path."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY environment variable is not set")
+
+    client = OpenAI(api_key=api_key)
+    os.makedirs("data", exist_ok=True)
+    file_path = os.path.join("data", f"tts_{uuid.uuid4()}.mp3")
+
+    response = await asyncio.to_thread(
+        lambda: client.audio.speech.create(
+            model="tts-1",
+            voice="nova",
+            input=script,
+        )
+    )
+    await asyncio.to_thread(response.stream_to_file, file_path)
+    return file_path
 
 
 @mcp.tool()
