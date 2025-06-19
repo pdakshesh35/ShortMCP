@@ -185,6 +185,24 @@ async def compile_video(scenes: Dict[str, Any]) -> str:
     """Stitch scenes with audio and images into a vertical video."""
     os.makedirs("data", exist_ok=True)
     output_path = os.path.join("data", f"video_{uuid.uuid4()}.mp4")
+
+    # Download images if the scene contains a URL rather than a file path
+    async with httpx.AsyncClient() as client:
+        for key, scene in scenes.items():
+            if not key.isdigit():
+                continue
+            image_path = scene.get("imagePath")
+            if isinstance(image_path, str) and image_path.startswith(("http://", "https://")):
+                try:
+                    resp = await client.get(image_path, timeout=60.0)
+                    resp.raise_for_status()
+                except Exception:
+                    continue
+                local_path = os.path.join("data", f"scene_{key}_{uuid.uuid4()}.jpg")
+                with open(local_path, "wb") as f:
+                    f.write(resp.content)
+                scene["imagePath"] = local_path
+
     generator = VideoGenerator(width=1080, height=1920)
     await asyncio.to_thread(generator.create_final_video, scenes, output_path)
     return output_path
