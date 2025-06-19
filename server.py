@@ -1,5 +1,7 @@
 from typing import Any, Dict, Optional
 
+import json
+
 import os
 import uuid
 import asyncio
@@ -181,8 +183,20 @@ async def generate_text_to_speech(script: str) -> str:
 
 
 @mcp.tool()
-async def compile_video(scenes: Dict[str, Any]) -> str:
-    """Stitch scenes with audio and images into a vertical video."""
+async def compile_video(scenes_json: str) -> str:
+    """Stitch scenes with audio and images into a vertical video.
+
+    Parameters
+    ----------
+    scenes_json: str
+        JSON string describing the scenes and metadata. This should match the
+        format returned by the script prompt.
+    """
+    try:
+        scenes: Dict[str, Any] = json.loads(scenes_json)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("Invalid JSON passed to compile_video") from exc
+
     os.makedirs("data", exist_ok=True)
     output_path = os.path.join("data", f"video_{uuid.uuid4()}.mp4")
 

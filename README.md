@@ -12,4 +12,7 @@ Make sure the environment variables `OPENAI_API_KEY` and `RUNWARE_API_KEY` are
 set to enable image and audio generation. Video stitching requires `ffmpeg` to
 be installed along with the Python packages `moviepy`, `Pillow` and `numpy`.
 
+The `compile_video` tool expects a JSON string describing the scenes and
+metadata for the final video.
+
 The server exposes tools that can be called from a compatible MCP client such as Claude Desktop.
