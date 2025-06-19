@@ -192,6 +192,7 @@ async def compile_video(scenes_json: str) -> str:
         JSON string describing the scenes and metadata. This should match the
         format returned by the script prompt.
     """
+    print("Parsing JSON for scenes...", flush=True)
     try:
         data: Dict[str, Any] = json.loads(scenes_json)
     except json.JSONDecodeError as exc:
@@ -202,7 +203,7 @@ async def compile_video(scenes_json: str) -> str:
     os.makedirs("data", exist_ok=True)
     output_path = os.path.join("data", f"video_{uuid.uuid4()}.mp4")
 
-    # Download images if the scene contains a URL rather than a file path
+    print("Downloading images...", flush=True)
     async with httpx.AsyncClient() as client:
         for key, scene in scenes.items():
             if not key.isdigit():
@@ -218,9 +219,10 @@ async def compile_video(scenes_json: str) -> str:
                 with open(local_path, "wb") as f:
                     f.write(resp.content)
                 scene["imagePath"] = local_path
-
+    print("Stitching video...", flush=True)
     generator = VideoGenerator(width=1080, height=1920)
     await asyncio.to_thread(generator.create_final_video, scenes, output_path)
+    print(f"Video saved to {output_path}", flush=True)
     return output_path
 
 
