@@ -54,4 +54,10 @@ shown below:
 
 Remote image URLs are downloaded automatically before stitching the final video.
 
+When `compile_video` runs, it creates a unique folder under `data/` for the
+current news item.  All scene assets are copied or downloaded into this folder
+with sequential names like `audio_1.mp3` and `image_1.jpg`.  The final video is
+saved as `video.mp4` inside the same folder.  Scenes are stitched in numeric
+order starting from 1.
+
 The server exposes tools that can be called from a compatible MCP client such as Claude Desktop.

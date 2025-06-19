@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional
 
 import json
+import shutil
 
 import os
 import uuid
@@ -241,28 +242,63 @@ async def compile_video(scenes_json: str | Dict[str, Any]) -> str:
 
     scenes = data.get("scenes", data)
 
-    os.makedirs("data", exist_ok=True)
-    output_path = os.path.join("data", f"video_{uuid.uuid4()}.mp4")
+    # create a unique directory for this news video
+    base_dir = os.path.join("data", f"news_{uuid.uuid4()}")
+    os.makedirs(base_dir, exist_ok=True)
+    output_path = os.path.join(base_dir, "video.mp4")
 
-    print("Downloading images...", flush=True)
+    print("Preparing scene assets...", flush=True)
     async with httpx.AsyncClient() as client:
         for key, scene in scenes.items():
-            if not key.isdigit():
+            if not str(key).isdigit():
                 continue
+            print(f"Processing scene {key}...", flush=True)
             effect = scene.get("effect")
             if effect not in ALLOWED_EFFECTS:
                 raise RuntimeError(f"Invalid effect '{effect}' in scene {key}")
-            image_path = scene.get("imagePath")
-            if isinstance(image_path, str) and image_path.startswith(("http://", "https://")):
+
+            # Copy or download audio
+            audio_src = scene.get("audioPath")
+            if not audio_src:
+                raise RuntimeError(f"Missing audioPath for scene {key}")
+            audio_ext = os.path.splitext(str(audio_src))[1] or ".mp3"
+            audio_dest = os.path.join(base_dir, f"audio_{key}{audio_ext}")
+            if isinstance(audio_src, str) and audio_src.startswith(("http://", "https://")):
                 try:
-                    resp = await client.get(image_path, timeout=60.0)
+                    resp = await client.get(audio_src, timeout=60.0)
                     resp.raise_for_status()
+                    with open(audio_dest, "wb") as f:
+                        f.write(resp.content)
                 except Exception:
-                    continue
-                local_path = os.path.join("data", f"scene_{key}_{uuid.uuid4()}.jpg")
-                with open(local_path, "wb") as f:
-                    f.write(resp.content)
-                scene["imagePath"] = local_path
+                    raise RuntimeError(f"Failed to download audio for scene {key}")
+            else:
+                try:
+                    shutil.copy(audio_src, audio_dest)
+                except Exception as exc:
+                    raise RuntimeError(f"Failed to copy audio for scene {key}") from exc
+            scene["audioPath"] = audio_dest
+
+            # Copy or download image
+            image_src = scene.get("imagePath")
+            if not image_src:
+                raise RuntimeError(f"Missing imagePath for scene {key}")
+            image_ext = os.path.splitext(str(image_src))[1] or ".jpg"
+            image_dest = os.path.join(base_dir, f"image_{key}{image_ext}")
+            if isinstance(image_src, str) and image_src.startswith(("http://", "https://")):
+                try:
+                    resp = await client.get(image_src, timeout=60.0)
+                    resp.raise_for_status()
+                    with open(image_dest, "wb") as f:
+                        f.write(resp.content)
+                except Exception:
+                    raise RuntimeError(f"Failed to download image for scene {key}")
+            else:
+                try:
+                    shutil.copy(image_src, image_dest)
+                except Exception as exc:
+                    raise RuntimeError(f"Failed to copy image for scene {key}") from exc
+            scene["imagePath"] = image_dest
+
     print("Stitching video...", flush=True)
     generator = VideoGenerator(width=1080, height=1920)
     await asyncio.to_thread(generator.create_final_video, scenes, output_path)
