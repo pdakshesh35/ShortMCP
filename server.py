@@ -5,6 +5,7 @@ import uuid
 import asyncio
 from openai import OpenAI
 from runware import Runware, IImageInference
+from video_generator import VideoGenerator
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -181,9 +182,12 @@ async def generate_text_to_speech(script: str) -> str:
 
 @mcp.tool()
 async def compile_video(scenes: Dict[str, Any]) -> str:
-    """Placeholder for final video compilation."""
-    # In a full implementation this would stitch images and audio together.
-    return "vertical_video_placeholder.mp4"
+    """Stitch scenes with audio and images into a vertical video."""
+    os.makedirs("data", exist_ok=True)
+    output_path = os.path.join("data", f"video_{uuid.uuid4()}.mp4")
+    generator = VideoGenerator(width=1080, height=1920)
+    await asyncio.to_thread(generator.create_final_video, scenes, output_path)
+    return output_path
 
 
 if __name__ == "__main__":

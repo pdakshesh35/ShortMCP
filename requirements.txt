@@ -28,3 +28,6 @@ typing-inspection==0.4.1
 uvicorn==0.34.3
 openai==1.88.0
 runware==0.4.13
+moviepy==1.0.3
+numpy==1.26.4
+Pillow==9.5.0
