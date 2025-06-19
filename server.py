@@ -200,9 +200,14 @@ async def compile_video(scenes_json: str | Dict[str, Any]) -> str:
     ----------
     scenes_json: str | dict
         JSON string or already-parsed dictionary describing the scenes and
-        metadata. This should match the format returned by the script prompt.
-        Each scene must include an ``effect`` value from
-        :data:`ALLOWED_EFFECTS`.
+        optional metadata. Scenes must be provided under a ``"scenes"`` key
+        with numeric identifiers.
+
+        Each scene dictionary is expected to contain the keys:
+        ``script`` (caption text), ``audioPath`` (voiceover file path),
+        ``imagePath`` (URL or local path to the background image),
+        ``duration`` (length in seconds) and ``effect``. The ``effect`` must
+        be one of :data:`ALLOWED_EFFECTS`.
     """
     print("Parsing JSON for scenes...", flush=True)
     if isinstance(scenes_json, dict):

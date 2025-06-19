@@ -12,12 +12,19 @@ Make sure the environment variables `OPENAI_API_KEY` and `RUNWARE_API_KEY` are
 set to enable image and audio generation. Video stitching requires `ffmpeg` to
 be installed along with the Python packages `moviepy`, `Pillow` and `numpy`.
 
-The `compile_video` tool accepts a JSON string or parsed dictionary describing the scenes and
-optional metadata for the final video. Each scene must include an `effect`
-value describing the pan or zoom animation. Allowed values are `zoom_in`,
-`zoom_out`, `pan_left`, `pan_right`, `pan_up` and `pan_down`. The scenes
-should be nested under a `"scenes"` key with numeric identifiers as shown
-below:
+The `compile_video` tool accepts a JSON string or parsed dictionary describing the
+scenes and optional metadata for the final video. Each scene dictionary should
+include the following keys:
+
+- `script` – text displayed as dynamic subtitles
+- `audioPath` – path to the voiceover MP3 file
+- `imagePath` – URL or local path to the scene image
+- `duration` – approximate length of the scene in seconds
+- `effect` – one of `zoom_in`, `zoom_out`, `pan_left`, `pan_right`,
+  `pan_up` or `pan_down`
+
+The scenes must be nested under a `"scenes"` key with numeric identifiers as
+shown below:
 
 ```json
 {
