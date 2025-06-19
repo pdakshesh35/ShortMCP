@@ -13,8 +13,11 @@ set to enable image and audio generation. Video stitching requires `ffmpeg` to
 be installed along with the Python packages `moviepy`, `Pillow` and `numpy`.
 
 The `compile_video` tool expects a JSON string describing the scenes and
-optional metadata for the final video. The scenes should be nested under a
-`"scenes"` key with numeric identifiers as shown below:
+optional metadata for the final video. Each scene must include an `effect`
+value describing the pan or zoom animation. Allowed values are `zoom_in`,
+`zoom_out`, `pan_left`, `pan_right`, `pan_up` and `pan_down`. The scenes
+should be nested under a `"scenes"` key with numeric identifiers as shown
+below:
 
 ```json
 {

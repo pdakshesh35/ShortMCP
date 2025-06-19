@@ -12,6 +12,16 @@ from video_generator import VideoGenerator
 import httpx
 from mcp.server.fastmcp import FastMCP
 
+# Valid effects for each scene
+ALLOWED_EFFECTS = {
+    "zoom_in",
+    "zoom_out",
+    "pan_left",
+    "pan_right",
+    "pan_up",
+    "pan_down",
+}
+
 # Initialize FastMCP server
 mcp = FastMCP("news")
 
@@ -190,7 +200,8 @@ async def compile_video(scenes_json: str) -> str:
     ----------
     scenes_json: str
         JSON string describing the scenes and metadata. This should match the
-        format returned by the script prompt.
+        format returned by the script prompt. Each scene must include an
+        ``effect`` value from :data:`ALLOWED_EFFECTS`.
     """
     print("Parsing JSON for scenes...", flush=True)
     try:
@@ -208,6 +219,9 @@ async def compile_video(scenes_json: str) -> str:
         for key, scene in scenes.items():
             if not key.isdigit():
                 continue
+            effect = scene.get("effect")
+            if effect not in ALLOWED_EFFECTS:
+                raise RuntimeError(f"Invalid effect '{effect}' in scene {key}")
             image_path = scene.get("imagePath")
             if isinstance(image_path, str) and image_path.startswith(("http://", "https://")):
                 try:
