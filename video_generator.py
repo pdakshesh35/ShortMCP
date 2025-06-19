@@ -164,13 +164,13 @@ class VideoGenerator:
         clip = CompositeVideoClip([img, subtitle], size=self.VIDEO_SIZE).set_duration(duration).set_audio(audio)
         return clip
 
-    def create_final_video(self, data: dict, output_file: str, bg_music_path: str | None = None):
+    def create_final_video(self, scenes: dict, output_file: str, bg_music_path: str | None = None):
         clips = []
-        total = int(data.get("scenes", len([k for k in data if k.isdigit()])))
-        for i in range(1, total + 1):
-            key = str(i)
-            if key in data:
-                clips.append(self.generate_scene_clip(data[key]))
+        keys = [k for k in scenes.keys() if str(k).isdigit()]
+        for key in sorted(keys, key=lambda x: int(x)):
+            scene = scenes.get(key)
+            if scene:
+                clips.append(self.generate_scene_clip(scene))
         final = concatenate_videoclips(clips, method="compose")
         bg_path = bg_music_path or os.path.join("data", "news-bg-music.mp3")
         if os.path.exists(bg_path):

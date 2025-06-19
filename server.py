@@ -193,9 +193,11 @@ async def compile_video(scenes_json: str) -> str:
         format returned by the script prompt.
     """
     try:
-        scenes: Dict[str, Any] = json.loads(scenes_json)
+        data: Dict[str, Any] = json.loads(scenes_json)
     except json.JSONDecodeError as exc:
         raise RuntimeError("Invalid JSON passed to compile_video") from exc
+
+    scenes = data.get("scenes", data)
 
     os.makedirs("data", exist_ok=True)
     output_path = os.path.join("data", f"video_{uuid.uuid4()}.mp4")
