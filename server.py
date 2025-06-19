@@ -257,7 +257,7 @@ async def compile_video(scenes_json: str | Dict[str, Any]) -> str:
             if effect not in ALLOWED_EFFECTS:
                 raise RuntimeError(f"Invalid effect '{effect}' in scene {key}")
 
-            # Copy or download audio
+            # Move or download audio
             audio_src = scene.get("audioPath")
             if not audio_src:
                 raise RuntimeError(f"Missing audioPath for scene {key}")
@@ -273,12 +273,12 @@ async def compile_video(scenes_json: str | Dict[str, Any]) -> str:
                     raise RuntimeError(f"Failed to download audio for scene {key}")
             else:
                 try:
-                    shutil.copy(audio_src, audio_dest)
+                    shutil.move(audio_src, audio_dest)
                 except Exception as exc:
                     raise RuntimeError(f"Failed to copy audio for scene {key}") from exc
             scene["audioPath"] = audio_dest
 
-            # Copy or download image
+            # Move or download image
             image_src = scene.get("imagePath")
             if not image_src:
                 raise RuntimeError(f"Missing imagePath for scene {key}")
@@ -294,7 +294,7 @@ async def compile_video(scenes_json: str | Dict[str, Any]) -> str:
                     raise RuntimeError(f"Failed to download image for scene {key}")
             else:
                 try:
-                    shutil.copy(image_src, image_dest)
+                    shutil.move(image_src, image_dest)
                 except Exception as exc:
                     raise RuntimeError(f"Failed to copy image for scene {key}") from exc
             scene["imagePath"] = image_dest
@@ -302,6 +302,14 @@ async def compile_video(scenes_json: str | Dict[str, Any]) -> str:
     print("Stitching video...", flush=True)
     generator = VideoGenerator(width=1080, height=1920)
     await asyncio.to_thread(generator.create_final_video, scenes, output_path)
+    print("Cleaning up temporary files...", flush=True)
+    for fname in os.listdir(base_dir):
+        path = os.path.join(base_dir, fname)
+        if path != output_path:
+            try:
+                os.remove(path)
+            except Exception:
+                pass
     print(f"Video saved to {output_path}", flush=True)
     return output_path
 
