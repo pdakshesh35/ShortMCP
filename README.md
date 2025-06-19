@@ -12,6 +12,11 @@ Make sure the environment variables `OPENAI_API_KEY` and `RUNWARE_API_KEY` are
 set to enable image and audio generation. Video stitching requires `ffmpeg` to
 be installed along with the Python packages `moviepy`, `Pillow` and `numpy`.
 
+The `generate_image` tool returns the path to a downloaded JPEG created from the
+Runware API. Likewise, `generate_text_to_speech` produces an MP3 file and
+returns its path. Use these paths as the `imagePath` and `audioPath` values when
+calling `compile_video`.
+
 The `compile_video` tool accepts a JSON string or parsed dictionary describing the
 scenes and optional metadata for the final video. Each scene dictionary should
 include the following keys:

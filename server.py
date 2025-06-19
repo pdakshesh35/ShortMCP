@@ -148,7 +148,12 @@ async def get_news(news: str) -> str:
 
 @mcp.tool()
 async def generate_image(prompt: str) -> str:
-    """Generate an image using the Runware API and return the image URL."""
+    """Generate an image and save it locally.
+
+    The Runware API is used to create the image based on ``prompt``. The
+    resulting image is downloaded to the ``data`` directory and the local file
+    path is returned so downstream tools can use it directly.
+    """
     api_key = os.getenv("RUNWARE_API_KEY")
     if not api_key:
         raise RuntimeError("RUNWARE_API_KEY environment variable is not set")
@@ -165,9 +170,25 @@ async def generate_image(prompt: str) -> str:
         width=1152,
     )
     images = await client.imageInference(requestImage=request)
-    if images and len(images) > 0:
-        return images[0].imageURL
-    raise RuntimeError("No image generated")
+    if not images or len(images) == 0:
+        raise RuntimeError("No image generated")
+
+    url = images[0].imageURL
+
+    os.makedirs("data", exist_ok=True)
+    local_path = os.path.join("data", f"img_{uuid.uuid4()}.jpg")
+
+    async with httpx.AsyncClient() as http:
+        try:
+            resp = await http.get(url, timeout=60.0)
+            resp.raise_for_status()
+        except Exception as exc:
+            raise RuntimeError("Failed to download generated image") from exc
+
+    with open(local_path, "wb") as f:
+        f.write(resp.content)
+
+    return local_path
 
 
 @mcp.tool()
