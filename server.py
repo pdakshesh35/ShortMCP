@@ -193,21 +193,25 @@ async def generate_text_to_speech(script: str) -> str:
 
 
 @mcp.tool()
-async def compile_video(scenes_json: str) -> str:
+async def compile_video(scenes_json: str | Dict[str, Any]) -> str:
     """Stitch scenes with audio and images into a vertical video.
 
     Parameters
     ----------
-    scenes_json: str
-        JSON string describing the scenes and metadata. This should match the
-        format returned by the script prompt. Each scene must include an
-        ``effect`` value from :data:`ALLOWED_EFFECTS`.
+    scenes_json: str | dict
+        JSON string or already-parsed dictionary describing the scenes and
+        metadata. This should match the format returned by the script prompt.
+        Each scene must include an ``effect`` value from
+        :data:`ALLOWED_EFFECTS`.
     """
     print("Parsing JSON for scenes...", flush=True)
-    try:
-        data: Dict[str, Any] = json.loads(scenes_json)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("Invalid JSON passed to compile_video") from exc
+    if isinstance(scenes_json, dict):
+        data = scenes_json
+    else:
+        try:
+            data = json.loads(scenes_json)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Invalid JSON passed to compile_video") from exc
 
     scenes = data.get("scenes", data)
 
