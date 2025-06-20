@@ -24,7 +24,7 @@ ALLOWED_EFFECTS = {
 }
 
 # Initialize FastMCP server
-mcp = FastMCP("news")
+mcp = FastMCP("news", host="0.0.0.0", port="8050")
 
 # Constants for the example weather tools
 NWS_API_BASE = "https://api.weather.gov"
