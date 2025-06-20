@@ -2,7 +2,7 @@
 
 This repository demonstrates a basic [MCP](https://github.com/manycoredai/mcp) server that exposes a few placeholder tools for generating vertical news videos.  The tools currently return simple placeholder values but show the structure for integrating weather data, image generation, text-to-speech and video compilation.
 
-Run the server with:
+Run the server with SSE transport:
 
 ```bash
 python server.py
@@ -60,4 +60,15 @@ this folder with sequential names like `audio_1.mp3` and `image_1.jpg`.  After
 the video is stitched, these temporary files are removed so the folder only
 contains `video.mp4`.  Scenes are stitched in numeric order starting from 1.
 
-The server exposes tools that can be called from a compatible MCP client such as Claude Desktop.
+The server exposes tools that can be called from a compatible MCP client such as Claude Desktop. The server uses Server-Sent Events (SSE) so clients receive progress updates while long running operations execute.
+
+## Docker
+
+Build the container and run it on port `8000`:
+
+```bash
+docker build -t shortmcp .
+docker run -p 8000:8000 -e OPENAI_API_KEY=... -e RUNWARE_API_KEY=... shortmcp
+```
+
+The container executes `run.sh`, which simply launches `python server.py`.

@@ -315,5 +315,6 @@ async def compile_video(scenes_json: str | Dict[str, Any]) -> str:
 
 
 if __name__ == "__main__":
-    # Initialize and run the server
-    mcp.run(transport="stdio")
+    # Initialize and run the server using SSE transport so clients receive
+    # progress updates while long-running tools execute.
+    mcp.run(transport="sse")
