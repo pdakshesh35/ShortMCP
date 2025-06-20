@@ -1,11 +1,11 @@
 # ShortMCP
 
-This repository demonstrates a basic [MCP](https://github.com/manycoredai/mcp) server that can turn a news article into a short-form vertical video.
+This repository demonstrates a basic [MCP](https://github.com/manycoredai/mcp) server that can turn any short piece of text into a vertical video. The content can be from **any niche** such as news, sports, tech, lifestyle or entertainment.
 
 The server exposes two high level tools:
 
-- `generate_prompt` – converts a raw news article into JSON describing each scene.
-- `generate_video` – uses that JSON to create images and voiceovers, stitches the scenes together, and returns the final video encoded with base64.
+- `generate_prompt` – converts raw text into JSON describing each scene. It expects a `niche` argument describing the topic area ("news", "tech", "sports", etc.).
+- `generate_video` – takes that JSON and a `niche` argument, creates the images and voiceovers, stitches the scenes together, and returns the final video encoded with base64.
 
 Run the server with SSE transport:
 
@@ -17,8 +17,8 @@ Make sure the environment variables `OPENAI_API_KEY` and `RUNWARE_API_KEY` are
 set to enable image and audio generation. Video stitching requires `ffmpeg` to
 be installed along with the Python packages `moviepy`, `Pillow` and `numpy`.
 
-`generate_video` expects a JSON string describing the scenes. Each scene must
-include `script`, `imagePrompt`, `duration` and `effect` (one of
+`generate_video` expects two arguments: a JSON string describing the scenes and a
+`niche` string. Each scene must include `script`, `imagePrompt`, `duration` and `effect` (one of
 `zoom_in`, `zoom_out`, `pan_left`, `pan_right`, `pan_up` or `pan_down`).
 
 The scenes must be nested under a `"scenes"` key with numeric identifiers as
@@ -48,7 +48,7 @@ stores all temporary files in a unique folder and removes them once the video is
 stitched so only `video.mp4` remains. Scenes are stitched sequentially starting
 from 1.
 
-The server exposes tools that can be called from a compatible MCP client such as Claude Desktop. The server uses Server-Sent Events (SSE) so clients receive progress updates while long running operations execute.
+The server exposes tools that can be called from a compatible MCP client such as Claude Desktop. The server uses Server-Sent Events (SSE) with an extended keep-alive timeout so clients receive progress updates during long running operations without timing out.
 
 ## Docker
 

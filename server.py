@@ -121,36 +121,36 @@ async def get_forecast(latitude: float, longitude: float) -> str:
 
 @mcp.prompt(
     "script-prompt",
-    description="Prompt template that converts a raw news article into a multi-scene JSON script",
+    description="Prompt template that converts raw text into a multi-scene JSON script",
 )
-def news_script_prompt(article: str) -> str:
+def build_script_prompt(text: str, niche: str) -> str:
     """Build the structured prompt for script generation."""
     return (
         f"""
-            Act as a viral content strategist and news scriptwriter for vertical video platforms like YouTube Shorts, Instagram Reels, TikTok, and Snapchat.
-            Your task is to break down the following news story into a short-form, highly engaging 2-minute narration targeted at college students and young professionals (ages 18–30).
+            Act as a viral content strategist and scriptwriter for vertical video platforms like YouTube Shorts, Instagram Reels, TikTok, and Snapchat.
+            The content niche is: {niche}.
+            Break down the following text into a short-form, highly engaging narration targeted at college students and young professionals (ages 18–30).
             Tone: Witty, informative, and lightly meme-style — like a confident, sarcastic best friend who knows her facts and isn’t afraid to drop a punchline.
             Voice: Female with strong personality. Include rhetorical hooks, Gen Z-friendly humor, and clever metaphors. Feel free to reference pop culture, TikTok trends, or modern slang in a tasteful way.
-            News Style: Cover all types — breaking news, trending topics, weird facts, tech, social issues, etc.
             {PROMPT_STRUCTURE_INSTRUCTIONS}
 
             End the final scene with a strong call to action, like:
             "If you liked this, hit follow — you deserve better news."
-            Begin with this news story:
-            {article}
+            Begin with this text:
+            {text}
         """
     )
 
 
 @mcp.tool()
-async def generate_prompt(news: str) -> str:
-    """Use OpenAI to convert a news article into a multi-scene JSON script."""
+async def generate_prompt(text: str, niche: str) -> str:
+    """Use OpenAI to convert raw ``text`` into a multi-scene JSON script."""
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY environment variable is not set")
 
     client = OpenAI(api_key=api_key)
-    prompt = news_script_prompt(news)
+    prompt = build_script_prompt(text, niche)
     print("Requesting script from OpenAI...", flush=True)
     response = await asyncio.to_thread(
         client.chat.completions.create,
@@ -214,7 +214,7 @@ async def _generate_tts(script: str, dest: str) -> str:
 
 
 @mcp.tool()
-async def generate_video(scenes_json: str | Dict[str, Any]) -> str:
+async def generate_video(scenes_json: str | Dict[str, Any], niche: str) -> str:
     """Generate all assets and stitch them into a final MP4 video.
 
     Parameters
@@ -225,6 +225,9 @@ async def generate_video(scenes_json: str | Dict[str, Any]) -> str:
         identifiers. Each scene should include ``script``, ``imagePrompt``,
         ``duration`` and ``effect``. ``effect`` must be one of
         :data:`ALLOWED_EFFECTS`.
+    niche: str
+        Text label for the type of content (e.g. "news", "sports"). Used only
+        to organize temporary assets.
     """
     print("Parsing JSON for scenes...", flush=True)
     if isinstance(scenes_json, dict):
@@ -237,8 +240,9 @@ async def generate_video(scenes_json: str | Dict[str, Any]) -> str:
 
     scenes = data.get("scenes", data)
 
-    # create a unique directory for this news video
-    base_dir = os.path.join("data", f"news_{uuid.uuid4()}")
+    # create a unique directory for this video based on the niche
+    safe_niche = ''.join(c if c.isalnum() or c in '-_' else '_' for c in niche.lower())
+    base_dir = os.path.join("data", f"{safe_niche}_{uuid.uuid4()}")
     os.makedirs(base_dir, exist_ok=True)
     output_path = os.path.join(base_dir, "video.mp4")
 
@@ -278,6 +282,15 @@ async def generate_video(scenes_json: str | Dict[str, Any]) -> str:
 
 
 if __name__ == "__main__":
-    # Initialize and run the server using SSE transport so clients receive
-    # progress updates while long-running tools execute.
-    mcp.run(transport="sse")
+    # Run the server with SSE and a generous keep-alive timeout so long
+    # video generation tasks don't time out.
+    import uvicorn
+
+    app = mcp.sse_app()
+    uvicorn.run(
+        app,
+        host=mcp.settings.host,
+        port=mcp.settings.port,
+        log_level=mcp.settings.log_level.lower(),
+        timeout_keep_alive=1200,
+    )
