@@ -42,7 +42,7 @@ Each scene should:
     • Be 10–15 seconds long
     • Push the story forward in a fun, engaging way
     • Use visual metaphors or animated whiteboard/doodle-style scenes
-    • Include motion effects like zoom_in, zoom_out, pan_left, pan_right, pan_up, or pan_down (use only these values)
+    • The effect must be exactly one of: zoom_in, zoom_out, pan_left, pan_right, pan_up, pan_down
 """
 
 
