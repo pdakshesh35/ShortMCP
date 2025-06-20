@@ -1,10 +1,30 @@
 from typing import Any, Dict, Optional
 
+import json
+import shutil
+
+import os
+import uuid
+import asyncio
+from openai import OpenAI
+from runware import Runware, IImageInference
+from video_generator import VideoGenerator
+
 import httpx
 from mcp.server.fastmcp import FastMCP
 
+# Valid effects for each scene
+ALLOWED_EFFECTS = {
+    "zoom_in",
+    "zoom_out",
+    "pan_left",
+    "pan_right",
+    "pan_up",
+    "pan_down",
+}
+
 # Initialize FastMCP server
-mcp = FastMCP("news")
+mcp = FastMCP("news", host="0.0.0.0", port="8050")
 
 # Constants for the example weather tools
 NWS_API_BASE = "https://api.weather.gov"
@@ -22,7 +42,7 @@ Each scene should:
     • Be 10–15 seconds long
     • Push the story forward in a fun, engaging way
     • Use visual metaphors or animated whiteboard/doodle-style scenes
-    • Include motion effects like zoom_in, pan_right, fade_in, wobble, etc.
+    • The effect must be exactly one of: zoom_in, zoom_out, pan_left, pan_right, pan_up, pan_down
 """
 
 
@@ -129,25 +149,172 @@ async def get_news(news: str) -> str:
 
 @mcp.tool()
 async def generate_image(prompt: str) -> str:
-    """Placeholder for image generation."""
-    # In a full implementation this would call an image generation service.
-    return "image_placeholder.png"
+    """Generate an image and save it locally.
+
+    The Runware API is used to create the image based on ``prompt``. The
+    resulting image is downloaded to the ``data`` directory and the local file
+    path is returned so downstream tools can use it directly.
+    """
+    api_key = os.getenv("RUNWARE_API_KEY")
+    if not api_key:
+        raise RuntimeError("RUNWARE_API_KEY environment variable is not set")
+
+    client = Runware(api_key=api_key)
+    await client.connect()
+
+    request = IImageInference(
+        positivePrompt=prompt,
+        taskUUID=str(uuid.uuid4()),
+        model="runware:100@1",
+        numberResults=1,
+        height=2048,
+        width=1152,
+    )
+    images = await client.imageInference(requestImage=request)
+    if not images or len(images) == 0:
+        raise RuntimeError("No image generated")
+
+    url = images[0].imageURL
+
+    os.makedirs("data", exist_ok=True)
+    local_path = os.path.join("data", f"img_{uuid.uuid4()}.jpg")
+
+    async with httpx.AsyncClient() as http:
+        try:
+            resp = await http.get(url, timeout=60.0)
+            resp.raise_for_status()
+        except Exception as exc:
+            raise RuntimeError("Failed to download generated image") from exc
+
+    with open(local_path, "wb") as f:
+        f.write(resp.content)
+
+    return local_path
 
 
 @mcp.tool()
 async def generate_text_to_speech(script: str) -> str:
-    """Placeholder for text-to-speech generation."""
-    # In a full implementation this would call a TTS service.
-    return "tts_audio_placeholder.mp3"
+    """Convert script text to speech using OpenAI TTS and return the file path."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY environment variable is not set")
+
+    client = OpenAI(api_key=api_key)
+    os.makedirs("data", exist_ok=True)
+    file_path = os.path.join("data", f"tts_{uuid.uuid4()}.mp3")
+
+    response = await asyncio.to_thread(
+        lambda: client.audio.speech.create(
+            model="tts-1",
+            voice="nova",
+            input=script,
+        )
+    )
+    await asyncio.to_thread(response.stream_to_file, file_path)
+    return file_path
 
 
 @mcp.tool()
-async def compile_video(scenes: Dict[str, Any]) -> str:
-    """Placeholder for final video compilation."""
-    # In a full implementation this would stitch images and audio together.
-    return "vertical_video_placeholder.mp4"
+async def compile_video(scenes_json: str | Dict[str, Any]) -> str:
+    """Stitch scenes with audio and images into a vertical video.
+
+    Parameters
+    ----------
+    scenes_json: str | dict
+        JSON string or already-parsed dictionary describing the scenes and
+        optional metadata. Scenes must be provided under a ``"scenes"`` key
+        with numeric identifiers.
+
+        Each scene dictionary is expected to contain the keys:
+        ``script`` (caption text), ``audioPath`` (voiceover file path),
+        ``imagePath`` (URL or local path to the background image),
+        ``duration`` (length in seconds) and ``effect``. The ``effect`` must
+        be one of :data:`ALLOWED_EFFECTS`.
+    """
+    print("Parsing JSON for scenes...", flush=True)
+    if isinstance(scenes_json, dict):
+        data = scenes_json
+    else:
+        try:
+            data = json.loads(scenes_json)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Invalid JSON passed to compile_video") from exc
+
+    scenes = data.get("scenes", data)
+
+    # create a unique directory for this news video
+    base_dir = os.path.join("data", f"news_{uuid.uuid4()}")
+    os.makedirs(base_dir, exist_ok=True)
+    output_path = os.path.join(base_dir, "video.mp4")
+
+    print("Preparing scene assets...", flush=True)
+    async with httpx.AsyncClient() as client:
+        for key, scene in scenes.items():
+            if not str(key).isdigit():
+                continue
+            print(f"Processing scene {key}...", flush=True)
+            effect = scene.get("effect")
+            if effect not in ALLOWED_EFFECTS:
+                raise RuntimeError(f"Invalid effect '{effect}' in scene {key}")
+
+            # Move or download audio
+            audio_src = scene.get("audioPath")
+            if not audio_src:
+                raise RuntimeError(f"Missing audioPath for scene {key}")
+            audio_ext = os.path.splitext(str(audio_src))[1] or ".mp3"
+            audio_dest = os.path.join(base_dir, f"audio_{key}{audio_ext}")
+            if isinstance(audio_src, str) and audio_src.startswith(("http://", "https://")):
+                try:
+                    resp = await client.get(audio_src, timeout=60.0)
+                    resp.raise_for_status()
+                    with open(audio_dest, "wb") as f:
+                        f.write(resp.content)
+                except Exception:
+                    raise RuntimeError(f"Failed to download audio for scene {key}")
+            else:
+                try:
+                    shutil.move(audio_src, audio_dest)
+                except Exception as exc:
+                    raise RuntimeError(f"Failed to copy audio for scene {key}") from exc
+            scene["audioPath"] = audio_dest
+
+            # Move or download image
+            image_src = scene.get("imagePath")
+            if not image_src:
+                raise RuntimeError(f"Missing imagePath for scene {key}")
+            image_ext = os.path.splitext(str(image_src))[1] or ".jpg"
+            image_dest = os.path.join(base_dir, f"image_{key}{image_ext}")
+            if isinstance(image_src, str) and image_src.startswith(("http://", "https://")):
+                try:
+                    resp = await client.get(image_src, timeout=60.0)
+                    resp.raise_for_status()
+                    with open(image_dest, "wb") as f:
+                        f.write(resp.content)
+                except Exception:
+                    raise RuntimeError(f"Failed to download image for scene {key}")
+            else:
+                try:
+                    shutil.move(image_src, image_dest)
+                except Exception as exc:
+                    raise RuntimeError(f"Failed to copy image for scene {key}") from exc
+            scene["imagePath"] = image_dest
+
+    print("Stitching video...", flush=True)
+    generator = VideoGenerator(width=1080, height=1920)
+    await asyncio.to_thread(generator.create_final_video, scenes, output_path)
+    print("Cleaning up temporary files...", flush=True)
+    for fname in os.listdir(base_dir):
+        path = os.path.join(base_dir, fname)
+        if path != output_path:
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+    print(f"Video saved to {output_path}", flush=True)
+    return output_path
 
 
 if __name__ == "__main__":
-    # Initialize and run the server
-    mcp.run(transport="stdio")
+    # Initialize and run the server using SSE transport so clients receive
+    # progress updates while long-running tools execute.
+    mcp.run(transport="sse")
