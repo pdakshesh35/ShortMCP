@@ -172,10 +172,9 @@ class VideoGenerator:
             if scene:
                 clips.append(self.generate_scene_clip(scene))
         final = concatenate_videoclips(clips, method="compose")
-        bg_path = bg_music_path or os.path.join("data", "news-bg-music.mp3")
-        if os.path.exists(bg_path):
+        if bg_music_path and os.path.exists(bg_music_path):
             try:
-                bg_music = AudioFileClip(bg_path)
+                bg_music = AudioFileClip(bg_music_path)
                 bg_music = afx.audio_loop(bg_music, duration=final.duration)
                 bg_music = bg_music.volumex(0.05)
                 final_audio = CompositeAudioClip([final.audio, bg_music])

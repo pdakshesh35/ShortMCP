@@ -25,8 +25,11 @@ ALLOWED_EFFECTS = {
     "pan_down",
 }
 
-# Background music to mix with narration
-BG_MUSIC_PATH = os.getenv("BG_MUSIC_PATH", os.path.join("data", "news-bg-music.mp3"))
+# Background music files per niche
+# Only "news" has a default track but new niches can be added
+BG_MUSIC_MAP = {
+    "news": os.getenv("NEWS_BG_MUSIC_PATH", os.path.join("data", "news-bg-music.mp3")),
+}
 
 # Initialize FastMCP server
 mcp = FastMCP("news")
@@ -274,11 +277,12 @@ async def generate_video(scenes_json: str | Dict[str, Any], niche: str) -> str:
 
         print("Stitching video...", flush=True)
         generator = VideoGenerator(width=1080, height=1920)
+        bg_music = BG_MUSIC_MAP.get(niche.lower())
         await asyncio.to_thread(
             generator.create_final_video,
             scenes,
             output_path,
-            BG_MUSIC_PATH,
+            bg_music,
         )
         print("Cleaning up temporary files...", flush=True)
         for fname in os.listdir(base_dir):

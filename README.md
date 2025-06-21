@@ -56,9 +56,14 @@ shown below:
 `generate_video` downloads images and creates voiceovers automatically. It
 stores all temporary files in a unique folder and removes them once the video is
 stitched so only `video.mp4` remains. Scenes are stitched sequentially starting
-from 1.
-During stitching a short background music track from `data/news-bg-music.mp3`
-is mixed quietly beneath the narration.
+from 1. Background music is selected based on the `niche` using a small mapping:
+
+```
+{"news": "data/news-bg-music.mp3"}
+```
+
+When the niche is "news" that track is mixed quietly under the narration. Other
+niches omit background music unless additional tracks are configured.
 
 The server exposes tools that can be called from a compatible MCP client such as Claude Desktop. The server uses Server-Sent Events (SSE) with an extended keep-alive timeout (30 minutes) so clients receive progress updates during long running operations without timing out.
 
