@@ -140,8 +140,28 @@ async def get_forecast(latitude: float, longitude: float) -> str:
 
 
 @mcp.tool()
-async def get_headlines(query: str, language: str = "en", max_results: int = 5) -> str:
-    """Retrieve news headlines using NewsAPI."""
+async def get_top_headlines(
+    query: str | None = None,
+    country: str | None = None,
+    category: str | None = None,
+    language: str = "en",
+    max_results: int = 5,
+) -> str:
+    """Retrieve top headlines from NewsAPI.
+
+    Parameters
+    ----------
+    query: str | None
+        Keywords or phrases to search for.
+    country: str | None
+        2-letter ISO code for the country (e.g. ``"us"``).
+    category: str | None
+        News category such as ``"business"`` or ``"sports"``.
+    language: str
+        Language of the articles, default ``"en"``.
+    max_results: int
+        Maximum number of headlines to return.
+    """
     api_key = os.getenv("NEWSAPI_KEY")
     if not api_key:
         raise RuntimeError("NEWSAPI_KEY environment variable is not set")
@@ -149,7 +169,13 @@ async def get_headlines(query: str, language: str = "en", max_results: int = 5) 
     client = NewsApiClient(api_key=api_key)
 
     def _fetch():
-        return client.get_top_headlines(q=query, language=language, page_size=max_results)
+        return client.get_top_headlines(
+            q=query,
+            country=country,
+            category=category,
+            language=language,
+            page_size=max_results,
+        )
 
     data = await asyncio.to_thread(_fetch)
     articles = data.get("articles", [])
