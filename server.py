@@ -287,14 +287,22 @@ async def generate_video(scenes_json: str | Dict[str, Any], niche: str) -> str:
 
 app = mcp.sse_app()
 
-@app.post("/api/generate_video")
-async def generate_video_api(payload: Dict[str, Any]) -> Response:
+
+async def generate_video_api(request):
     """HTTP API wrapper for :func:`generate_video`.
 
     Expects JSON with ``niche`` and ``scenes`` keys and returns the final
     video file. If an error occurs a JSON object with ``error`` is returned
     instead.
     """
+    try:
+        payload: Dict[str, Any] = await request.json()
+    except Exception:
+        return Response(
+            json.dumps({"error": "Invalid JSON payload"}),
+            media_type="application/json",
+            status_code=400,
+        )
     niche = payload.get("niche", "news")
     scenes = payload.get("scenes")
     if scenes is None:
@@ -312,6 +320,9 @@ async def generate_video_api(payload: Dict[str, Any]) -> Response:
         )
     video_bytes = base64.b64decode(result)
     return Response(video_bytes, media_type="video/mp4")
+
+
+app.add_route("/api/generate_video", generate_video_api, methods=["POST"])
 
 
 if __name__ == "__main__":
