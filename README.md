@@ -57,8 +57,10 @@ shown below:
 stores all temporary files in a unique folder and removes them once the video is
 stitched so only `video.mp4` remains. Scenes are stitched sequentially starting
 from 1.
+During stitching a short background music track from `data/news-bg-music.mp3`
+is mixed quietly beneath the narration.
 
-The server exposes tools that can be called from a compatible MCP client such as Claude Desktop. The server uses Server-Sent Events (SSE) with an extended keep-alive timeout so clients receive progress updates during long running operations without timing out.
+The server exposes tools that can be called from a compatible MCP client such as Claude Desktop. The server uses Server-Sent Events (SSE) with an extended keep-alive timeout (30 minutes) so clients receive progress updates during long running operations without timing out.
 
 ### Calling via HTTP
 
@@ -78,11 +80,17 @@ The payload format matches the structure described above.
 
 ## Docker
 
-Build the container and run it on port `8000`:
+Build the container and run it. Pass a custom `PORT` environment variable if you
+need to expose a different port:
 
 ```bash
 docker build -t shortmcp .
-docker run -p 8000:8000 -e OPENAI_API_KEY=... -e RUNWARE_API_KEY=... shortmcp
+# change 8000 to any port you prefer
+docker run -p 8000:8000 \
+  -e PORT=8000 \
+  -e OPENAI_API_KEY=... \
+  -e RUNWARE_API_KEY=... \
+  shortmcp
 ```
 
 The container executes `run.sh`, which simply launches `python server.py`.

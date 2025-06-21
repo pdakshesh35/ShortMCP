@@ -25,6 +25,9 @@ ALLOWED_EFFECTS = {
     "pan_down",
 }
 
+# Background music to mix with narration
+BG_MUSIC_PATH = os.getenv("BG_MUSIC_PATH", os.path.join("data", "news-bg-music.mp3"))
+
 # Initialize FastMCP server
 mcp = FastMCP("news")
 
@@ -271,7 +274,12 @@ async def generate_video(scenes_json: str | Dict[str, Any], niche: str) -> str:
 
         print("Stitching video...", flush=True)
         generator = VideoGenerator(width=1080, height=1920)
-        await asyncio.to_thread(generator.create_final_video, scenes, output_path)
+        await asyncio.to_thread(
+            generator.create_final_video,
+            scenes,
+            output_path,
+            BG_MUSIC_PATH,
+        )
         print("Cleaning up temporary files...", flush=True)
         for fname in os.listdir(base_dir):
             path = os.path.join(base_dir, fname)
@@ -336,8 +344,8 @@ if __name__ == "__main__":
 
     uvicorn.run(
         app,
-        host=mcp.settings.host,
-        port=mcp.settings.port,
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", mcp.settings.port)),
         log_level=mcp.settings.log_level.lower(),
-        timeout_keep_alive=1200,
+        timeout_keep_alive=1800,
     )
