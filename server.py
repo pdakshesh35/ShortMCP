@@ -28,7 +28,7 @@ ALLOWED_EFFECTS = {
 # Background music files per niche
 # Only "news" has a default track but new niches can be added
 BG_MUSIC_MAP = {
-    "news": os.getenv("NEWS_BG_MUSIC_PATH", os.path.join("data", "news-bg-music.mp3")),
+    "news": os.getenv("NEWS_BG_MUSIC_PATH", os.path.join("data/bg_music", "news-bg-music.mp3")),
 }
 
 # Initialize FastMCP server
@@ -43,8 +43,8 @@ Output the response as JSON in this exact structure:
     {
         "niche": "{niche}",
         "scenes": {
-            "1": { "script": "Scene 1 script here", "imagePrompt": "Scene 1 image description", "effect": "pan_left", "duration": 15 },
-            "2": { "script": "Scene 2 script here", "imagePrompt": "Scene 2 image description", "effect": "zoom_in", "duration": 12 },
+            "1": { "script": "Scene 1 script here", "imagePrompt": "Scene 1 image description", "effect": "pan_left", "duration": 15, "instruction": "Deliver this scene in a confident, slightly sassy tone. Emphasize sarcasm on [specific line if needed], keep pace steady, and engage like you're dropping tea at brunch. Maintain same female narrator voice throughout all scenes." },
+            "2": { "script": "Scene 2 script here", "imagePrompt": "Scene 2 image description", "effect": "zoom_in", "duration": 12, "instruction": "Same voice and energy as Scene 1. Add a playful smirk in your tone when mentioning [insert phrase]. Keep it energetic, punchy, and smart." },
             ...,
             "metadata": { "title": "Insert catchy video title based on the content", "description": "Insert a short YouTube-style description summarizing the story in 1–2 lines with hashtags if relevant" }
         }
@@ -55,6 +55,14 @@ Each scene should:
     • Push the story forward in a fun, engaging way
     • Use visual metaphors or animated whiteboard/doodle-style scenes
     • The effect must be exactly one of: zoom_in, zoom_out, pan_left, pan_right, pan_up, pan_down
+
+Key Notes for the instruction Field:
+   - Tailored to each scene’s tone and pacing.
+   - Includes emotional direction (e.g., sarcasm, surprise, playfulness).
+   - Ensures narrator consistency across the video.
+   - Optimized for AI voice tools like openai.
+
+
 """
 
 
@@ -205,7 +213,7 @@ async def _generate_image(prompt: str, dest: str) -> str:
     return dest
 
 
-async def _generate_tts(script: str, dest: str) -> str:
+async def _generate_tts(script: str, instruction: str, dest: str) -> str:
     """Convert ``script`` text to speech using OpenAI TTS and save it to ``dest``."""
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -215,9 +223,10 @@ async def _generate_tts(script: str, dest: str) -> str:
 
     response = await asyncio.to_thread(
         lambda: client.audio.speech.create(
-            model="tts-1",
+            model="gpt-4o-mini-tts",
             voice="nova",
             input=script,
+            instructions=instruction
         )
     )
     await asyncio.to_thread(response.stream_to_file, dest)
@@ -267,10 +276,11 @@ async def generate_video(scenes_json: str | Dict[str, Any], niche: str) -> str:
                 raise RuntimeError(f"Invalid effect '{effect}' in scene {key}")
             script = scene.get("script")
             prompt = scene.get("imagePrompt", script)
+            instruction = scene.get("instruction")
 
             audio_dest = os.path.join(base_dir, f"audio_{key}.mp3")
             image_dest = os.path.join(base_dir, f"image_{key}.jpg")
-            await _generate_tts(script, audio_dest)
+            await _generate_tts(script, instruction, audio_dest)
             await _generate_image(prompt, image_dest)
             scene["audioPath"] = audio_dest
             scene["imagePath"] = image_dest
@@ -351,5 +361,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=int(os.environ.get("PORT", mcp.settings.port)),
         log_level=mcp.settings.log_level.lower(),
-        timeout_keep_alive=1800,
+        timeout_keep_alive=1800
     )
