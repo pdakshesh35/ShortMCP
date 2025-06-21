@@ -229,56 +229,59 @@ async def generate_video(scenes_json: str | Dict[str, Any], niche: str) -> str:
         Text label for the type of content (e.g. "news", "sports"). Used only
         to organize temporary assets.
     """
-    print("Parsing JSON for scenes...", flush=True)
-    if isinstance(scenes_json, dict):
-        data = scenes_json
-    else:
-        try:
-            data = json.loads(scenes_json)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError("Invalid JSON passed to generate_video") from exc
-
-    scenes = data.get("scenes", data)
-
-    # create a unique directory for this video based on the niche
-    safe_niche = ''.join(c if c.isalnum() or c in '-_' else '_' for c in niche.lower())
-    base_dir = os.path.join("data", f"{safe_niche}_{uuid.uuid4()}")
-    os.makedirs(base_dir, exist_ok=True)
-    output_path = os.path.join(base_dir, "video.mp4")
-
-    print("Generating scene assets...", flush=True)
-    for key, scene in scenes.items():
-        if not str(key).isdigit():
-            continue
-        print(f"Processing scene {key}...", flush=True)
-        effect = scene.get("effect")
-        if effect not in ALLOWED_EFFECTS:
-            raise RuntimeError(f"Invalid effect '{effect}' in scene {key}")
-        script = scene.get("script")
-        prompt = scene.get("imagePrompt", script)
-
-        audio_dest = os.path.join(base_dir, f"audio_{key}.mp3")
-        image_dest = os.path.join(base_dir, f"image_{key}.jpg")
-        await _generate_tts(script, audio_dest)
-        await _generate_image(prompt, image_dest)
-        scene["audioPath"] = audio_dest
-        scene["imagePath"] = image_dest
-
-    print("Stitching video...", flush=True)
-    generator = VideoGenerator(width=1080, height=1920)
-    await asyncio.to_thread(generator.create_final_video, scenes, output_path)
-    print("Cleaning up temporary files...", flush=True)
-    for fname in os.listdir(base_dir):
-        path = os.path.join(base_dir, fname)
-        if path != output_path:
+    try:
+        print("Parsing JSON for scenes...", flush=True)
+        if isinstance(scenes_json, dict):
+            data = scenes_json
+        else:
             try:
-                os.remove(path)
-            except Exception:
-                pass
-    with open(output_path, "rb") as f:
-        video_bytes = f.read()
-    print(f"Video saved to {output_path}", flush=True)
-    return base64.b64encode(video_bytes).decode("ascii")
+                data = json.loads(scenes_json)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError("Invalid JSON passed to generate_video") from exc
+
+        scenes = data.get("scenes", data)
+
+        safe_niche = ''.join(c if c.isalnum() or c in '-_' else '_' for c in niche.lower())
+        base_dir = os.path.join("data", f"{safe_niche}_{uuid.uuid4()}")
+        os.makedirs(base_dir, exist_ok=True)
+        output_path = os.path.join(base_dir, "video.mp4")
+
+        print("Generating scene assets...", flush=True)
+        for key, scene in scenes.items():
+            if not str(key).isdigit():
+                continue
+            print(f"Processing scene {key}...", flush=True)
+            effect = scene.get("effect")
+            if effect not in ALLOWED_EFFECTS:
+                raise RuntimeError(f"Invalid effect '{effect}' in scene {key}")
+            script = scene.get("script")
+            prompt = scene.get("imagePrompt", script)
+
+            audio_dest = os.path.join(base_dir, f"audio_{key}.mp3")
+            image_dest = os.path.join(base_dir, f"image_{key}.jpg")
+            await _generate_tts(script, audio_dest)
+            await _generate_image(prompt, image_dest)
+            scene["audioPath"] = audio_dest
+            scene["imagePath"] = image_dest
+
+        print("Stitching video...", flush=True)
+        generator = VideoGenerator(width=1080, height=1920)
+        await asyncio.to_thread(generator.create_final_video, scenes, output_path)
+        print("Cleaning up temporary files...", flush=True)
+        for fname in os.listdir(base_dir):
+            path = os.path.join(base_dir, fname)
+            if path != output_path:
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
+        with open(output_path, "rb") as f:
+            video_bytes = f.read()
+        print(f"Video saved to {output_path}", flush=True)
+        return base64.b64encode(video_bytes).decode("ascii")
+    except Exception as exc:
+        print(f"Error during video generation: {exc}", flush=True)
+        return f"ERROR: {exc}"
 
 
 if __name__ == "__main__":
