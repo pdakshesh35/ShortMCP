@@ -10,6 +10,7 @@ import asyncio
 from openai import OpenAI
 from runware import Runware, IImageInference
 from video_generator import VideoGenerator
+from starlette.responses import Response
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -284,12 +285,40 @@ async def generate_video(scenes_json: str | Dict[str, Any], niche: str) -> str:
         return f"ERROR: {exc}"
 
 
+app = mcp.sse_app()
+
+@app.post("/api/generate_video")
+async def generate_video_api(payload: Dict[str, Any]) -> Response:
+    """HTTP API wrapper for :func:`generate_video`.
+
+    Expects JSON with ``niche`` and ``scenes`` keys and returns the final
+    video file. If an error occurs a JSON object with ``error`` is returned
+    instead.
+    """
+    niche = payload.get("niche", "news")
+    scenes = payload.get("scenes")
+    if scenes is None:
+        return Response(
+            json.dumps({"error": "Missing 'scenes' field"}),
+            media_type="application/json",
+            status_code=400,
+        )
+    result = await generate_video({"scenes": scenes}, niche)
+    if isinstance(result, str) and result.startswith("ERROR"):
+        return Response(
+            json.dumps({"error": result}),
+            media_type="application/json",
+            status_code=500,
+        )
+    video_bytes = base64.b64decode(result)
+    return Response(video_bytes, media_type="video/mp4")
+
+
 if __name__ == "__main__":
     # Run the server with SSE and a generous keep-alive timeout so long
     # video generation tasks don't time out.
     import uvicorn
 
-    app = mcp.sse_app()
     uvicorn.run(
         app,
         host=mcp.settings.host,

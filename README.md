@@ -50,6 +50,22 @@ from 1.
 
 The server exposes tools that can be called from a compatible MCP client such as Claude Desktop. The server uses Server-Sent Events (SSE) with an extended keep-alive timeout so clients receive progress updates during long running operations without timing out.
 
+### Calling via HTTP
+
+`generate_video` can also be used as a simple API. Send the JSON scenes to
+`/api/generate_video` and the server will respond with the final MP4 file.
+
+Example using `curl`:
+
+```bash
+curl -X POST http://localhost:8000/api/generate_video \
+  -H "Content-Type: application/json" \
+  -d '{"niche":"news","scenes":{...}}' \
+  --output video.mp4
+```
+
+The payload format matches the structure described above.
+
 ## Docker
 
 Build the container and run it on port `8000`:
