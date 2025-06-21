@@ -22,8 +22,8 @@ Run the server with SSE transport:
 python server.py
 ```
 
-Make sure the environment variables `OPENAI_API_KEY` and `RUNWARE_API_KEY` are
-set to enable image and audio generation. Video stitching requires `ffmpeg` to
+Make sure the environment variables `OPENAI_API_KEY`, `RUNWARE_API_KEY` and
+`NEWSAPI_KEY` are set to enable image, audio and news retrieval. Video stitching requires `ffmpeg` to
 be installed along with the Python packages `moviepy`, `Pillow` and `numpy`.
 
 `generate_video` expects two arguments: a JSON string describing the scenes and a
@@ -95,6 +95,7 @@ docker run -p 8000:8000 \
   -e PORT=8000 \
   -e OPENAI_API_KEY=... \
   -e RUNWARE_API_KEY=... \
+  -e NEWSAPI_KEY=... \
   shortmcp
 ```
 

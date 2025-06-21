@@ -11,6 +11,7 @@ from openai import OpenAI
 from runware import Runware, IImageInference
 from video_generator import VideoGenerator
 from starlette.responses import Response
+from newsapi import NewsApiClient
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -136,6 +137,27 @@ async def get_forecast(latitude: float, longitude: float) -> str:
         forecasts.append(forecast)
 
     return "\n---\n".join(forecasts)
+
+
+@mcp.tool()
+async def get_headlines(query: str, language: str = "en", max_results: int = 5) -> str:
+    """Retrieve news headlines using NewsAPI."""
+    api_key = os.getenv("NEWSAPI_KEY")
+    if not api_key:
+        raise RuntimeError("NEWSAPI_KEY environment variable is not set")
+
+    client = NewsApiClient(api_key=api_key)
+
+    def _fetch():
+        return client.get_top_headlines(q=query, language=language, page_size=max_results)
+
+    data = await asyncio.to_thread(_fetch)
+    articles = data.get("articles", [])
+    if not articles:
+        return "No articles found."
+
+    lines = [f"{art.get('title', 'No title')} - {art.get('url', '')}" for art in articles[:max_results]]
+    return "\n".join(lines)
 
 
 @mcp.prompt(
