@@ -1,7 +1,8 @@
 from typing import Any, Dict, Optional
 
+import base64
+
 import json
-import shutil
 
 import os
 import uuid
@@ -9,6 +10,7 @@ import asyncio
 from openai import OpenAI
 from runware import Runware, IImageInference
 from video_generator import VideoGenerator
+from starlette.responses import Response
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -23,8 +25,14 @@ ALLOWED_EFFECTS = {
     "pan_down",
 }
 
+# Background music files per niche
+# Only "news" has a default track but new niches can be added
+BG_MUSIC_MAP = {
+    "news": os.getenv("NEWS_BG_MUSIC_PATH", os.path.join("data/bg_music", "news-bg-music.mp3")),
+}
+
 # Initialize FastMCP server
-mcp = FastMCP("news", host="0.0.0.0", port="8050")
+mcp = FastMCP("news")
 
 # Constants for the example weather tools
 NWS_API_BASE = "https://api.weather.gov"
@@ -32,17 +40,29 @@ USER_AGENT = "weather-app/1.0"
 
 PROMPT_STRUCTURE_INSTRUCTIONS = """
 Output the response as JSON in this exact structure:
-    {{
-    "1": {{ "script": "Scene 1 script here", "imagePrompt": "Scene 1 image description", "effect": "pan_left", "duration": 15 }},
-    "2": {{ "script": "Scene 2 script here", "imagePrompt": "Scene 2 image description", "effect": "zoom_in", "duration": 12 }},
-    ...,
-    "metadata": {{ "title": "Insert catchy video title based on the content", "description": "Insert a short YouTube-style description summarizing the story in 1–2 lines with hashtags if relevant" }}
-    }}
+    {
+        "niche": "{niche}",
+        "scenes": {
+            "1": { "script": "Scene 1 script here", "imagePrompt": "Scene 1 image description", "effect": "pan_left", "duration": 15, "instruction": "Deliver this scene in a confident, slightly sassy tone. Emphasize sarcasm on [specific line if needed], keep pace steady, and engage like you're dropping tea at brunch. Maintain same female narrator voice throughout all scenes." },
+            "2": { "script": "Scene 2 script here", "imagePrompt": "Scene 2 image description", "effect": "zoom_in", "duration": 12, "instruction": "Same voice and energy as Scene 1. Add a playful smirk in your tone when mentioning [insert phrase]. Keep it energetic, punchy, and smart." },
+            ...,
+            "metadata": { "title": "Insert catchy video title based on the content", "description": "Insert a short YouTube-style description summarizing the story in 1–2 lines with hashtags if relevant" }
+        }
+    }
+Put all scenes under the "scenes" key and include the niche value at the top level.
 Each scene should:
     • Be 10–15 seconds long
     • Push the story forward in a fun, engaging way
     • Use visual metaphors or animated whiteboard/doodle-style scenes
     • The effect must be exactly one of: zoom_in, zoom_out, pan_left, pan_right, pan_up, pan_down
+
+Key Notes for the instruction Field:
+   - Tailored to each scene’s tone and pacing.
+   - Includes emotional direction (e.g., sarcasm, surprise, playfulness).
+   - Ensures narrator consistency across the video.
+   - Optimized for AI voice tools like openai.
+
+
 """
 
 
@@ -120,41 +140,47 @@ async def get_forecast(latitude: float, longitude: float) -> str:
 
 @mcp.prompt(
     "script-prompt",
-    description="Prompt template that converts a raw news article into a multi-scene JSON script",
+    description="Prompt template that converts raw text into a multi-scene JSON script",
 )
-def news_script_prompt(article: str) -> str:
+def build_script_prompt(text: str, niche: str) -> str:
     """Build the structured prompt for script generation."""
     return (
         f"""
-            Act as a viral content strategist and news scriptwriter for vertical video platforms like YouTube Shorts, Instagram Reels, TikTok, and Snapchat.
-            Your task is to break down the following news story into a short-form, highly engaging 2-minute narration targeted at college students and young professionals (ages 18–30).
+            Act as a viral content strategist and scriptwriter for vertical video platforms like YouTube Shorts, Instagram Reels, TikTok, and Snapchat.
+            The content niche is: {niche}.
+            Break down the following text into a short-form, highly engaging narration targeted at college students and young professionals (ages 18–30).
             Tone: Witty, informative, and lightly meme-style — like a confident, sarcastic best friend who knows her facts and isn’t afraid to drop a punchline.
             Voice: Female with strong personality. Include rhetorical hooks, Gen Z-friendly humor, and clever metaphors. Feel free to reference pop culture, TikTok trends, or modern slang in a tasteful way.
-            News Style: Cover all types — breaking news, trending topics, weird facts, tech, social issues, etc.
             {PROMPT_STRUCTURE_INSTRUCTIONS}
 
             End the final scene with a strong call to action, like:
             "If you liked this, hit follow — you deserve better news."
-            Begin with this news story:
-            {article}
+            Begin with this text:
+            {text}
         """
     )
 
 
 @mcp.tool()
-async def get_news(news: str) -> str:
-    """Divide a news story into a multi-scene JSON script."""
-    return news_script_prompt(news)
+async def generate_prompt(text: str, niche: str) -> str:
+    """Use OpenAI to convert raw ``text`` into a multi-scene JSON script."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY environment variable is not set")
+
+    client = OpenAI(api_key=api_key)
+    prompt = build_script_prompt(text, niche)
+    print("Requesting script from OpenAI...", flush=True)
+    response = await asyncio.to_thread(
+        client.chat.completions.create,
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.choices[0].message.content.strip()
 
 
-@mcp.tool()
-async def generate_image(prompt: str) -> str:
-    """Generate an image and save it locally.
-
-    The Runware API is used to create the image based on ``prompt``. The
-    resulting image is downloaded to the ``data`` directory and the local file
-    path is returned so downstream tools can use it directly.
-    """
+async def _generate_image(prompt: str, dest: str) -> str:
+    """Generate an image with Runware and save it to ``dest``."""
     api_key = os.getenv("RUNWARE_API_KEY")
     if not api_key:
         raise RuntimeError("RUNWARE_API_KEY environment variable is not set")
@@ -176,79 +202,71 @@ async def generate_image(prompt: str) -> str:
 
     url = images[0].imageURL
 
-    os.makedirs("data", exist_ok=True)
-    local_path = os.path.join("data", f"img_{uuid.uuid4()}.jpg")
-
     async with httpx.AsyncClient() as http:
         try:
             resp = await http.get(url, timeout=60.0)
             resp.raise_for_status()
         except Exception as exc:
             raise RuntimeError("Failed to download generated image") from exc
-
-    with open(local_path, "wb") as f:
+    with open(dest, "wb") as f:
         f.write(resp.content)
+    return dest
 
-    return local_path
 
-
-@mcp.tool()
-async def generate_text_to_speech(script: str) -> str:
-    """Convert script text to speech using OpenAI TTS and return the file path."""
+async def _generate_tts(script: str, instruction: str, dest: str) -> str:
+    """Convert ``script`` text to speech using OpenAI TTS and save it to ``dest``."""
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY environment variable is not set")
 
     client = OpenAI(api_key=api_key)
-    os.makedirs("data", exist_ok=True)
-    file_path = os.path.join("data", f"tts_{uuid.uuid4()}.mp3")
 
     response = await asyncio.to_thread(
         lambda: client.audio.speech.create(
-            model="tts-1",
+            model="gpt-4o-mini-tts",
             voice="nova",
             input=script,
+            instructions=instruction
         )
     )
-    await asyncio.to_thread(response.stream_to_file, file_path)
-    return file_path
+    await asyncio.to_thread(response.stream_to_file, dest)
+    return dest
 
 
 @mcp.tool()
-async def compile_video(scenes_json: str | Dict[str, Any]) -> str:
-    """Stitch scenes with audio and images into a vertical video.
+async def generate_video(scenes_json: str | Dict[str, Any], niche: str) -> str:
+    """Generate all assets and stitch them into a final MP4 video.
 
     Parameters
     ----------
     scenes_json: str | dict
-        JSON string or already-parsed dictionary describing the scenes and
-        optional metadata. Scenes must be provided under a ``"scenes"`` key
-        with numeric identifiers.
-
-        Each scene dictionary is expected to contain the keys:
-        ``script`` (caption text), ``audioPath`` (voiceover file path),
-        ``imagePath`` (URL or local path to the background image),
-        ``duration`` (length in seconds) and ``effect``. The ``effect`` must
-        be one of :data:`ALLOWED_EFFECTS`.
+        JSON string or already-parsed dictionary describing the scenes.
+        Scenes must be provided under a ``"scenes"`` key with numeric
+        identifiers. Each scene should include ``script``, ``imagePrompt``,
+        ``duration`` and ``effect``. ``effect`` must be one of
+        :data:`ALLOWED_EFFECTS`.
+    niche: str
+        Text label for the type of content (e.g. "news", "sports"). Used only
+        to organize temporary assets.
     """
-    print("Parsing JSON for scenes...", flush=True)
-    if isinstance(scenes_json, dict):
-        data = scenes_json
-    else:
-        try:
-            data = json.loads(scenes_json)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError("Invalid JSON passed to compile_video") from exc
+    try:
+        print("Parsing JSON for scenes...", flush=True)
+        if isinstance(scenes_json, dict):
+            data = scenes_json
+        else:
+            try:
+                data = json.loads(scenes_json)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError("Invalid JSON passed to generate_video") from exc
 
-    scenes = data.get("scenes", data)
+        scenes = data.get("scenes", data)
 
-    # create a unique directory for this news video
-    base_dir = os.path.join("data", f"news_{uuid.uuid4()}")
-    os.makedirs(base_dir, exist_ok=True)
-    output_path = os.path.join(base_dir, "video.mp4")
+        safe_niche = ''.join(c if c.isalnum() or c in '-_' else '_' for c in niche.lower())
+        base_dir = os.path.join("data", f"{safe_niche}_{uuid.uuid4()}")
+        os.makedirs(base_dir, exist_ok=True)
+        output_path = os.path.join(base_dir, "video.mp4")
 
-    print("Preparing scene assets...", flush=True)
-    async with httpx.AsyncClient() as client:
+        print("Generating scene assets...", flush=True)
         for key, scene in scenes.items():
             if not str(key).isdigit():
                 continue
@@ -256,65 +274,92 @@ async def compile_video(scenes_json: str | Dict[str, Any]) -> str:
             effect = scene.get("effect")
             if effect not in ALLOWED_EFFECTS:
                 raise RuntimeError(f"Invalid effect '{effect}' in scene {key}")
+            script = scene.get("script")
+            prompt = scene.get("imagePrompt", script)
+            instruction = scene.get("instruction")
 
-            # Move or download audio
-            audio_src = scene.get("audioPath")
-            if not audio_src:
-                raise RuntimeError(f"Missing audioPath for scene {key}")
-            audio_ext = os.path.splitext(str(audio_src))[1] or ".mp3"
-            audio_dest = os.path.join(base_dir, f"audio_{key}{audio_ext}")
-            if isinstance(audio_src, str) and audio_src.startswith(("http://", "https://")):
-                try:
-                    resp = await client.get(audio_src, timeout=60.0)
-                    resp.raise_for_status()
-                    with open(audio_dest, "wb") as f:
-                        f.write(resp.content)
-                except Exception:
-                    raise RuntimeError(f"Failed to download audio for scene {key}")
-            else:
-                try:
-                    shutil.move(audio_src, audio_dest)
-                except Exception as exc:
-                    raise RuntimeError(f"Failed to copy audio for scene {key}") from exc
+            audio_dest = os.path.join(base_dir, f"audio_{key}.mp3")
+            image_dest = os.path.join(base_dir, f"image_{key}.jpg")
+            await _generate_tts(script, instruction, audio_dest)
+            await _generate_image(prompt, image_dest)
             scene["audioPath"] = audio_dest
-
-            # Move or download image
-            image_src = scene.get("imagePath")
-            if not image_src:
-                raise RuntimeError(f"Missing imagePath for scene {key}")
-            image_ext = os.path.splitext(str(image_src))[1] or ".jpg"
-            image_dest = os.path.join(base_dir, f"image_{key}{image_ext}")
-            if isinstance(image_src, str) and image_src.startswith(("http://", "https://")):
-                try:
-                    resp = await client.get(image_src, timeout=60.0)
-                    resp.raise_for_status()
-                    with open(image_dest, "wb") as f:
-                        f.write(resp.content)
-                except Exception:
-                    raise RuntimeError(f"Failed to download image for scene {key}")
-            else:
-                try:
-                    shutil.move(image_src, image_dest)
-                except Exception as exc:
-                    raise RuntimeError(f"Failed to copy image for scene {key}") from exc
             scene["imagePath"] = image_dest
 
-    print("Stitching video...", flush=True)
-    generator = VideoGenerator(width=1080, height=1920)
-    await asyncio.to_thread(generator.create_final_video, scenes, output_path)
-    print("Cleaning up temporary files...", flush=True)
-    for fname in os.listdir(base_dir):
-        path = os.path.join(base_dir, fname)
-        if path != output_path:
-            try:
-                os.remove(path)
-            except Exception:
-                pass
-    print(f"Video saved to {output_path}", flush=True)
-    return output_path
+        print("Stitching video...", flush=True)
+        generator = VideoGenerator(width=1080, height=1920)
+        bg_music = BG_MUSIC_MAP.get(niche.lower())
+        await asyncio.to_thread(
+            generator.create_final_video,
+            scenes,
+            output_path,
+            bg_music,
+        )
+        print("Cleaning up temporary files...", flush=True)
+        for fname in os.listdir(base_dir):
+            path = os.path.join(base_dir, fname)
+            if path != output_path:
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
+        with open(output_path, "rb") as f:
+            video_bytes = f.read()
+        print(f"Video saved to {output_path}", flush=True)
+        return base64.b64encode(video_bytes).decode("ascii")
+    except Exception as exc:
+        print(f"Error during video generation: {exc}", flush=True)
+        return f"ERROR: {exc}"
+
+
+app = mcp.sse_app()
+
+
+async def generate_video_api(request):
+    """HTTP API wrapper for :func:`generate_video`.
+
+    Expects JSON with ``niche`` and ``scenes`` keys and returns the final
+    video file. If an error occurs a JSON object with ``error`` is returned
+    instead.
+    """
+    try:
+        payload: Dict[str, Any] = await request.json()
+    except Exception:
+        return Response(
+            json.dumps({"error": "Invalid JSON payload"}),
+            media_type="application/json",
+            status_code=400,
+        )
+    niche = payload.get("niche", "news")
+    scenes = payload.get("scenes")
+    if scenes is None:
+        return Response(
+            json.dumps({"error": "Missing 'scenes' field"}),
+            media_type="application/json",
+            status_code=400,
+        )
+    result = await generate_video({"scenes": scenes}, niche)
+    if isinstance(result, str) and result.startswith("ERROR"):
+        return Response(
+            json.dumps({"error": result}),
+            media_type="application/json",
+            status_code=500,
+        )
+    video_bytes = base64.b64decode(result)
+    return Response(video_bytes, media_type="video/mp4")
+
+
+app.add_route("/api/generate_video", generate_video_api, methods=["POST"])
 
 
 if __name__ == "__main__":
-    # Initialize and run the server using SSE transport so clients receive
-    # progress updates while long-running tools execute.
-    mcp.run(transport="sse")
+    # Run the server with SSE and a generous keep-alive timeout so long
+    # video generation tasks don't time out.
+    import uvicorn
+
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", mcp.settings.port)),
+        log_level=mcp.settings.log_level.lower(),
+        timeout_keep_alive=1800
+    )
