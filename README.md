@@ -4,7 +4,16 @@ This repository demonstrates a basic [MCP](https://github.com/manycoredai/mcp) s
 
 The server exposes two high level tools:
 
-- `generate_prompt` – converts raw text into JSON describing each scene. It expects a `niche` argument describing the topic area ("news", "tech", "sports", etc.).
+- `generate_prompt` – converts raw text into JSON describing each scene. It expects a `niche` argument describing the topic area ("news", "tech", "sports", etc.). The response is JSON with the niche and a `scenes` object, for example:
+
+  ```json
+  {
+    "niche": "news",
+    "scenes": {
+      "1": { "script": "Scene 1", "imagePrompt": "Desc 1", "effect": "zoom_in", "duration": 15 }
+    }
+  }
+  ```
 - `generate_video` – takes that JSON and a `niche` argument, creates the images and voiceovers, stitches the scenes together, and returns the final video encoded with base64.
 
 Run the server with SSE transport:
@@ -26,6 +35,7 @@ shown below:
 
 ```json
 {
+  "niche": "news",
   "scenes": {
     "1": {
       "effect": "zoom_in",

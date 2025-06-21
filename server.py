@@ -34,12 +34,16 @@ USER_AGENT = "weather-app/1.0"
 
 PROMPT_STRUCTURE_INSTRUCTIONS = """
 Output the response as JSON in this exact structure:
-    {{
-    "1": {{ "script": "Scene 1 script here", "imagePrompt": "Scene 1 image description", "effect": "pan_left", "duration": 15 }},
-    "2": {{ "script": "Scene 2 script here", "imagePrompt": "Scene 2 image description", "effect": "zoom_in", "duration": 12 }},
-    ...,
-    "metadata": {{ "title": "Insert catchy video title based on the content", "description": "Insert a short YouTube-style description summarizing the story in 1–2 lines with hashtags if relevant" }}
-    }}
+    {
+        "niche": "{niche}",
+        "scenes": {
+            "1": { "script": "Scene 1 script here", "imagePrompt": "Scene 1 image description", "effect": "pan_left", "duration": 15 },
+            "2": { "script": "Scene 2 script here", "imagePrompt": "Scene 2 image description", "effect": "zoom_in", "duration": 12 },
+            ...,
+            "metadata": { "title": "Insert catchy video title based on the content", "description": "Insert a short YouTube-style description summarizing the story in 1–2 lines with hashtags if relevant" }
+        }
+    }
+Put all scenes under the "scenes" key and include the niche value at the top level.
 Each scene should:
     • Be 10–15 seconds long
     • Push the story forward in a fun, engaging way
