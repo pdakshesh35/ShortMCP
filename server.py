@@ -32,6 +32,17 @@ BG_MUSIC_MAP = {
     "news": os.getenv("NEWS_BG_MUSIC_PATH", os.path.join("data/bg_music", "news-bg-music.mp3")),
 }
 
+# Permitted categories for the NewsAPI tool
+NEWS_CATEGORIES = {
+    "business",
+    "entertainment",
+    "general",
+    "health",
+    "science",
+    "sports",
+    "technology",
+}
+
 # Initialize FastMCP server
 mcp = FastMCP("news")
 
@@ -156,15 +167,22 @@ async def get_top_headlines(
     country: str | None
         2-letter ISO code for the country (e.g. ``"us"``).
     category: str | None
-        News category such as ``"business"`` or ``"sports"``.
+        One of the predefined categories:
+        ``business``, ``entertainment``, ``general``, ``health``, ``science``,
+        ``sports`` or ``technology``.
     language: str
         Language of the articles, default ``"en"``.
     max_results: int
-        Maximum number of headlines to return.
+        Number of headlines to request. The first article that includes
+        a title, description and content will be returned.
     """
     api_key = os.getenv("NEWSAPI_KEY")
     if not api_key:
         raise RuntimeError("NEWSAPI_KEY environment variable is not set")
+
+    if category is not None and category not in NEWS_CATEGORIES:
+        allowed = ", ".join(sorted(NEWS_CATEGORIES))
+        raise ValueError(f"category must be one of {allowed}")
 
     client = NewsApiClient(api_key=api_key)
 
@@ -178,12 +196,14 @@ async def get_top_headlines(
         )
 
     data = await asyncio.to_thread(_fetch)
-    articles = data.get("articles", [])
-    if not articles:
-        return "No articles found."
+    for art in data.get("articles", []):
+        title = art.get("title")
+        desc = art.get("description")
+        content = art.get("content")
+        if title and desc and content:
+            return f"{title}\n{desc}\n{content}"
 
-    lines = [f"{art.get('title', 'No title')} - {art.get('url', '')}" for art in articles[:max_results]]
-    return "\n".join(lines)
+    return "No articles with full content available."
 
 
 @mcp.prompt(

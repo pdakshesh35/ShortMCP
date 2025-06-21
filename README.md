@@ -15,7 +15,7 @@ The server exposes three high level tools:
   }
   ```
 - `generate_video` – takes that JSON and a `niche` argument, creates the images and voiceovers, stitches the scenes together, and returns the final video encoded with base64.
-- `get_top_headlines` – fetches the latest top headlines from NewsAPI. Provide optional `query`, `country` or `category` arguments to narrow the results.
+- `get_top_headlines` – fetches the latest top headlines from NewsAPI. Provide optional `query`, `country` or a `category` from `business`, `entertainment`, `general`, `health`, `science`, `sports`, or `technology`. The tool returns the first article that includes a title, description and content.
 
 Run the server with SSE transport:
 
