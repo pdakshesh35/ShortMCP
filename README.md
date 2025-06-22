@@ -2,7 +2,7 @@
 
 This repository demonstrates a basic [MCP](https://github.com/manycoredai/mcp) server that can turn any short piece of text into a vertical video. The content can be from **any niche** such as news, sports, tech, lifestyle or entertainment.
 
-The server exposes two high level tools:
+The server exposes three high level tools:
 
 - `generate_prompt` – converts raw text into JSON describing each scene. It expects a `niche` argument describing the topic area ("news", "tech", "sports", etc.). The response is JSON with the niche and a `scenes` object, for example:
 
@@ -15,6 +15,7 @@ The server exposes two high level tools:
   }
   ```
 - `generate_video` – takes that JSON and a `niche` argument, creates the images and voiceovers, stitches the scenes together, and returns the final video encoded with base64.
+- `get_top_headlines` – fetches the latest top headlines from NewsAPI. Provide optional `query`, `country` or a `category` from `business`, `entertainment`, `general`, `health`, `science`, `sports`, or `technology`. The tool returns the first article that includes a title, description and content.
 
 Run the server with SSE transport:
 
@@ -22,8 +23,8 @@ Run the server with SSE transport:
 python server.py
 ```
 
-Make sure the environment variables `OPENAI_API_KEY` and `RUNWARE_API_KEY` are
-set to enable image and audio generation. Video stitching requires `ffmpeg` to
+Make sure the environment variables `OPENAI_API_KEY`, `RUNWARE_API_KEY` and
+`NEWSAPI_KEY` are set to enable image, audio and news retrieval. Video stitching requires `ffmpeg` to
 be installed along with the Python packages `moviepy`, `Pillow` and `numpy`.
 
 `generate_video` expects two arguments: a JSON string describing the scenes and a
@@ -95,6 +96,7 @@ docker run -p 8000:8000 \
   -e PORT=8000 \
   -e OPENAI_API_KEY=... \
   -e RUNWARE_API_KEY=... \
+  -e NEWSAPI_KEY=... \
   shortmcp
 ```
 
