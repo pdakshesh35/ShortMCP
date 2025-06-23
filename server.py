@@ -138,6 +138,7 @@ async def get_forecast(latitude: float, longitude: float) -> str:
     return "\n---\n".join(forecasts)
 
 
+
 @mcp.prompt(
     "script-prompt",
     description="Prompt template that converts raw text into a multi-scene JSON script",
@@ -233,7 +234,6 @@ async def _generate_tts(script: str, instruction: str, dest: str) -> str:
     return dest
 
 
-@mcp.tool()
 async def generate_video(scenes_json: str | Dict[str, Any], niche: str) -> str:
     """Generate all assets and stitch them into a final MP4 video.
 
