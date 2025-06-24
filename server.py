@@ -1,4 +1,5 @@
 from typing import Any, Dict, Optional
+import concurrent.futures
 
 import base64
 
@@ -33,6 +34,11 @@ BG_MUSIC_MAP = {
 
 # Initialize FastMCP server
 mcp = FastMCP("news")
+
+# Thread pool executor for heavy video generation tasks
+THREAD_POOL = concurrent.futures.ThreadPoolExecutor(
+    max_workers=int(os.getenv("VIDEO_WORKERS", "4"))
+)
 
 # Constants for the example weather tools
 NWS_API_BASE = "https://api.weather.gov"
@@ -294,17 +300,20 @@ async def generate_video(scenes_json: str | Dict[str, Any], niche: str) -> str:
             output_path,
             bg_music,
         )
+        with open(output_path, "rb") as f:
+            video_bytes = f.read()
         print("Cleaning up temporary files...", flush=True)
         for fname in os.listdir(base_dir):
             path = os.path.join(base_dir, fname)
-            if path != output_path:
-                try:
-                    os.remove(path)
-                except Exception:
-                    pass
-        with open(output_path, "rb") as f:
-            video_bytes = f.read()
-        print(f"Video saved to {output_path}", flush=True)
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+        try:
+            os.rmdir(base_dir)
+        except Exception:
+            pass
+        print(f"Video saved to {output_path} and folder cleaned", flush=True)
         return base64.b64encode(video_bytes).decode("ascii")
     except Exception as exc:
         print(f"Error during video generation: {exc}", flush=True)
@@ -312,6 +321,14 @@ async def generate_video(scenes_json: str | Dict[str, Any], niche: str) -> str:
 
 
 app = mcp.sse_app()
+
+
+async def generate_video_threaded(scenes_json: Dict[str, Any], niche: str) -> str:
+    """Run ``generate_video`` in a separate thread to avoid blocking the event loop."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        THREAD_POOL, lambda: asyncio.run(generate_video(scenes_json, niche))
+    )
 
 
 async def generate_video_api(request):
@@ -337,7 +354,7 @@ async def generate_video_api(request):
             media_type="application/json",
             status_code=400,
         )
-    result = await generate_video({"scenes": scenes}, niche)
+    result = await generate_video_threaded({"scenes": scenes}, niche)
     if isinstance(result, str) and result.startswith("ERROR"):
         return Response(
             json.dumps({"error": result}),
