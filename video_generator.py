@@ -176,7 +176,7 @@ class VideoGenerator:
             try:
                 bg_music = AudioFileClip(bg_music_path)
                 bg_music = afx.audio_loop(bg_music, duration=final.duration)
-                bg_music = bg_music.volumex(0.05)
+                bg_music = bg_music.volumex(0.08)
                 final_audio = CompositeAudioClip([final.audio, bg_music])
                 final = final.set_audio(final_audio)
             except Exception:
