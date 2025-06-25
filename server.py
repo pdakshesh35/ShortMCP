@@ -35,6 +35,7 @@ BG_MUSIC_MAP = {
 # Initialize FastMCP server
 mcp = FastMCP("news")
 
+RUNWARE_MODEL_ID = os.getenv("RUNWARE_MODEL_ID", "runware:97@3")
 # Thread pool executor for heavy video generation tasks
 THREAD_POOL = concurrent.futures.ThreadPoolExecutor(
     max_workers=int(os.getenv("VIDEO_WORKERS", "4"))
@@ -198,7 +199,7 @@ async def _generate_image(prompt: str, dest: str) -> str:
     request = IImageInference(
         positivePrompt=prompt,
         taskUUID=str(uuid.uuid4()),
-        model="runware:100@1",
+        model=RUNWARE_MODEL_ID,
         numberResults=1,
         height=2048,
         width=1152,
