@@ -187,7 +187,12 @@ async def generate_prompt(text: str, niche: str) -> str:
     return response.choices[0].message.content.strip()
 
 
-async def _generate_image(prompt: str, dest: str, negative_prompt: str | None = None) -> str:
+async def _generate_image(
+    prompt: str,
+    dest: str,
+    negative_prompt: str | None = None,
+    model_id: str | None = None,
+) -> str:
     """Generate an image with Runware and save it to ``dest``.
 
     Parameters
@@ -199,6 +204,9 @@ async def _generate_image(prompt: str, dest: str, negative_prompt: str | None = 
     negative_prompt: str | None, optional
         Negative prompt text to steer the generator away from unwanted
         elements. If ``None``, no negative prompt is sent.
+    model_id: str | None, optional
+        ID of the Runware model to use. When ``None`` the environment
+        variable ``RUNWARE_MODEL_ID`` is used.
     """
     api_key = os.getenv("RUNWARE_API_KEY")
     if not api_key:
@@ -210,7 +218,7 @@ async def _generate_image(prompt: str, dest: str, negative_prompt: str | None = 
     request = IImageInference(
         positivePrompt=prompt,
         taskUUID=str(uuid.uuid4()),
-        model=RUNWARE_MODEL_ID,
+        model=model_id or RUNWARE_MODEL_ID,
         numberResults=1,
         height=2048,
         width=1152,
@@ -263,7 +271,8 @@ async def generate_video(scenes_json: str | Dict[str, Any], niche: str) -> str:
         Scenes must be provided under a ``"scenes"`` key with numeric
         identifiers. Each scene should include ``script``, ``imagePrompt``,
         ``duration`` and ``effect``. ``effect`` must be one of
-        :data:`ALLOWED_EFFECTS`.
+        :data:`ALLOWED_EFFECTS`. Optionally add ``negativeImagePrompt`` and
+        ``runwareModelId`` to control image generation.
     niche: str
         Text label for the type of content (e.g. "news", "sports"). Used only
         to organize temporary assets.
@@ -296,12 +305,13 @@ async def generate_video(scenes_json: str | Dict[str, Any], niche: str) -> str:
             script = scene.get("script")
             prompt = scene.get("imagePrompt", script)
             negative = scene.get("negativeImagePrompt")
+            model_id = scene.get("runwareModelId")
             instruction = scene.get("instruction")
 
             audio_dest = os.path.join(base_dir, f"audio_{key}.mp3")
             image_dest = os.path.join(base_dir, f"image_{key}.jpg")
             await _generate_tts(script, instruction, audio_dest)
-            await _generate_image(prompt, image_dest, negative)
+            await _generate_image(prompt, image_dest, negative, model_id)
             scene["audioPath"] = audio_dest
             scene["imagePath"] = image_dest
 
