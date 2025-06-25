@@ -10,7 +10,7 @@ The server exposes two high level tools:
   {
     "niche": "news",
     "scenes": {
-      "1": { "script": "Scene 1", "imagePrompt": "Desc 1", "effect": "zoom_in", "duration": 15 }
+      "1": { "script": "Scene 1", "imagePrompt": "Desc 1", "negativeImagePrompt": "avoid", "effect": "zoom_in", "duration": 15 }
     }
   }
   ```
@@ -27,8 +27,10 @@ set to enable image and audio generation. Video stitching requires `ffmpeg` to
 be installed along with the Python packages `moviepy`, `Pillow` and `numpy`.
 
 `generate_video` expects two arguments: a JSON string describing the scenes and a
-`niche` string. Each scene must include `script`, `imagePrompt`, `duration` and `effect` (one of
-`zoom_in`, `zoom_out`, `pan_left`, `pan_right`, `pan_up` or `pan_down`).
+`niche` string. Each scene must include `script`, `imagePrompt`, `duration` and
+`effect` (one of `zoom_in`, `zoom_out`, `pan_left`, `pan_right`, `pan_up` or
+`pan_down`). You may optionally provide `negativeImagePrompt` to avoid unwanted
+elements in the generated image.
 
 The scenes must be nested under a `"scenes"` key with numeric identifiers as
 shown below:
@@ -41,6 +43,7 @@ shown below:
       "effect": "zoom_in",
       "script": "Scene one script",
       "imagePrompt": "Description for scene one",
+      "negativeImagePrompt": "things to avoid",
       "duration": 15
     },
     "2": {

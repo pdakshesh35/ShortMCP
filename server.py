@@ -187,8 +187,19 @@ async def generate_prompt(text: str, niche: str) -> str:
     return response.choices[0].message.content.strip()
 
 
-async def _generate_image(prompt: str, dest: str) -> str:
-    """Generate an image with Runware and save it to ``dest``."""
+async def _generate_image(prompt: str, dest: str, negative_prompt: str | None = None) -> str:
+    """Generate an image with Runware and save it to ``dest``.
+
+    Parameters
+    ----------
+    prompt: str
+        Positive prompt text describing the desired image.
+    dest: str
+        File path where the downloaded image should be saved.
+    negative_prompt: str | None, optional
+        Negative prompt text to steer the generator away from unwanted
+        elements. If ``None``, no negative prompt is sent.
+    """
     api_key = os.getenv("RUNWARE_API_KEY")
     if not api_key:
         raise RuntimeError("RUNWARE_API_KEY environment variable is not set")
@@ -203,6 +214,7 @@ async def _generate_image(prompt: str, dest: str) -> str:
         numberResults=1,
         height=2048,
         width=1152,
+        negativePrompt=negative_prompt,
     )
     images = await client.imageInference(requestImage=request)
     if not images or len(images) == 0:
@@ -283,12 +295,13 @@ async def generate_video(scenes_json: str | Dict[str, Any], niche: str) -> str:
                 raise RuntimeError(f"Invalid effect '{effect}' in scene {key}")
             script = scene.get("script")
             prompt = scene.get("imagePrompt", script)
+            negative = scene.get("negativeImagePrompt")
             instruction = scene.get("instruction")
 
             audio_dest = os.path.join(base_dir, f"audio_{key}.mp3")
             image_dest = os.path.join(base_dir, f"image_{key}.jpg")
             await _generate_tts(script, instruction, audio_dest)
-            await _generate_image(prompt, image_dest)
+            await _generate_image(prompt, image_dest, negative)
             scene["audioPath"] = audio_dest
             scene["imagePath"] = image_dest
 
